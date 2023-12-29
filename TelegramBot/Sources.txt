@@ -1,0 +1,7 @@
+﻿https://emojipedia.org
+
+https://www.npgsql.org/doc/types/basic.html
+
+https://learn.microsoft.com/ru-ru/dotnet/csharp/linq/
+
+https://core.telegram.org/api
