@@ -1,6 +1,8 @@
 ﻿using Telegram.Bot;
 using Telegram.Bot.Types;
 using Telegram.Bot.Types.Enums;
+using NuosHelpBot.Extensions;
+using Telegram.Bot.Types.ReplyMarkups;
 
 namespace NuosHelpBot.Commands;
 
@@ -14,9 +16,16 @@ public class ScheduleGroupCommand : Command
             message.From.Id,
             "Завантаження...");
 
-        var schedule = await bot.Context.GetSchedule(message.From.Id, 1, 1, false);
-        var text = bot.MessageFormatter.ScheduleToString(schedule, 1, 1);
-        var keyboard = bot.KeyboardController.ScheduleGroupKeyboard(msg.MessageId, 1, 1);
+        string text;
+        InlineKeyboardMarkup keyboard;
+
+        using (var context = new BotContext())
+        {
+            var semester = BotTimeManager.CurrentSemester;
+            var classes = context.GetClasses(message.From.Id, 1, 1, semester);
+            text = classes.ToString(1, 1);
+            keyboard = Keyboards.ScheduleGroupKb(msg.MessageId, 1, 1);
+        }
 
         await bot.Client.EditMessageTextAsync(
             message.Chat, 

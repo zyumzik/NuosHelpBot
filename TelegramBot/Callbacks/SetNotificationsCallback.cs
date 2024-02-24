@@ -12,12 +12,15 @@ public class SetNotificationsCallback : Callback
         var args = ParseArgs(query);
         bool notify = args[0] == "true"? true : false;
 
-        await bot.Context.SetStudentsNotifications(query.From.Id, notify);
+        using (var context = new BotContext())
+        {
+            context.SetStudentNotifications(query.From.Id, notify);
+        }
 
         var text = notify ? "Ви ввімкнули повідомлення.\n" : "Ви вимкнули повідомлення.\n";
-            text += "Перед початком кожної пари ви будете отримувати відповідне до вашої групи та підгрупи повідомлення. " +
-            "Ви завжди можете змінити свої дані в налаштуваннях. Приємного користування NuosHelpBot!";
-        var keyboard = bot.KeyboardController.MainMenu;
+        text += "Перед початком кожної пари ви будете отримувати відповідне до вашої групи та підгрупи повідомлення. " +
+        "Ви завжди можете змінити свої дані в налаштуваннях. Приємного користування NuosHelpBot!";
+        var keyboard = Keyboards.MainMenu;
 
         await bot.Client.SendTextMessageAsync(
             query.From.Id,

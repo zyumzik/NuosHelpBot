@@ -10,12 +10,23 @@ public class BotTimeManager : IDisposable
     private System.Timers.Timer _timer;
     private IEnumerable<Time> _times;
 
-    public int CurrentWeek
+    public static int CurrentSemester
     {
         get
         {
-            var autumnTerm = DateTime.Parse(_bot.Configuration.Get("autumnTermDate"));
-            var springTerm = DateTime.Parse(_bot.Configuration.Get("springTermDate"));
+            var nowTime = DateTime.Now;
+
+            if (nowTime.Month >= 6 && nowTime.Month <= 12) return 1;
+            else return 2;
+        }
+    }
+
+    public static int CurrentWeek
+    {
+        get
+        {
+            var autumnTerm = DateTime.Parse(ConfigurationManager.AppSettings["autumnTermDate"]);
+            var springTerm = DateTime.Parse(ConfigurationManager.AppSettings["springTermDate"]);
 
             DateTime startDate = DateTime.Now;
             if (startDate <= springTerm) startDate = autumnTerm;
@@ -27,7 +38,7 @@ public class BotTimeManager : IDisposable
         }
     }
 
-    public int CurrentDay
+    public static int CurrentDay
     {
         get => (int)DateTime.Now.DayOfWeek;
     }
@@ -37,11 +48,14 @@ public class BotTimeManager : IDisposable
         _bot = bot;
     }
 
-    public async void Start()
+    public void Start()
     {
-        _times = await _bot.Context.GetRawTable<Time>("Times");
+        using (var context = new BotContext())
+        {
+            _times = context.GetTimes();
+        }
 
-        var minutes = int.Parse(_bot.Configuration.Get("timerTickMinutes"));
+        var minutes = int.Parse(ConfigurationManager.AppSettings["timerTickMinutes"]);
         var _tempTimer = new System.Timers.Timer(1000);
         _tempTimer.AutoReset = true;
         _tempTimer.Elapsed += (s, e) =>
@@ -63,7 +77,7 @@ public class BotTimeManager : IDisposable
 
     private void OnTimerTick(object? sender, ElapsedEventArgs e)
     {
-        var minutes = int.Parse(_bot.Configuration.Get("minutesBeforeClassNotify"));
+        var minutes = int.Parse(ConfigurationManager.AppSettings["minutesBeforeClassNotify"]);
         var currentTime = DateTime.Now.TimeOfDay;
         foreach (var time in _times)
         {

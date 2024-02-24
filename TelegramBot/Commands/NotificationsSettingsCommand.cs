@@ -9,7 +9,7 @@ public class NotificationsSettingsCommand : Command
 
     public override async Task Execute(Bot bot, Message message)
     {
-        var keyboard = bot.KeyboardController.SetNotifying;
+        var keyboard = Keyboards.SetNotifyingKb;
 
         await bot.Client.SendTextMessageAsync(
             message.From.Id,

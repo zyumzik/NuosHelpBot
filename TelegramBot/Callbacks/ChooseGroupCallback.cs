@@ -1,6 +1,5 @@
 ﻿using Telegram.Bot;
 using Telegram.Bot.Types;
-using NuosHelpBot.Models;
 
 namespace NuosHelpBot.Callbacks;
 
@@ -10,12 +9,11 @@ public class ChooseGroupCallback : Callback
 
     public override async Task Execute(Bot bot, CallbackQuery query)
     {
-        var groups = await bot.Context.GetRawTable<Group>("Groups");
-        var keyboard = bot.KeyboardController.GroupsInlineKeyboard(groups, true);
+        var keyboard = Keyboards.EducationFormKb;
 
         await bot.Client.SendTextMessageAsync(
-            query.Message.Chat.Id,
-            $"Оберіть вашу групу",
+            query.From.Id,
+            "Оберіть форму та рівень освіти: ",
             replyMarkup: keyboard);
     }
 }

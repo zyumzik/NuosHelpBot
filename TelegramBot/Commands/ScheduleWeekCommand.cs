@@ -1,6 +1,9 @@
 ﻿using Telegram.Bot;
 using Telegram.Bot.Types;
 using Telegram.Bot.Types.Enums;
+using NuosHelpBot.Extensions;
+using NuosHelpBot.Models;
+using Telegram.Bot.Types.ReplyMarkups;
 
 namespace NuosHelpBot.Commands;
 
@@ -14,13 +17,25 @@ public class ScheduleWeekCommand : Command
             message.From.Id,
             "Завантаження...");
 
-        int currentWeek = bot.TimeManager.CurrentWeek;
-        int currentDay = bot.TimeManager.CurrentDay;
+        string text;
+        InlineKeyboardMarkup keyboard;
 
-        var schedule = await bot.Context.GetSchedule(message.From.Id, currentWeek, currentDay);
+        using (var context = new BotContext())
+        {
+            var week = BotTimeManager.CurrentWeek;
+            var day = BotTimeManager.CurrentDay;
 
-        var text = bot.MessageFormatter.ScheduleToString(schedule, currentWeek, currentDay, true);
-        var keyboard = bot.KeyboardController.ScheduleWeekKeyboard(msg.MessageId, currentWeek, currentDay);
+            if (day > 5)
+            {
+                day = 1;
+                week = week == 1 ? 2 : 1;
+            }
+
+            var semester = BotTimeManager.CurrentSemester;
+            var classes = context.GetClasses(message.From.Id, week, day, semester);
+            text = classes.ToString(week, day, true);
+            keyboard = Keyboards.ScheduleWeekKb(msg.MessageId, week, day);
+        }
 
         await bot.Client.EditMessageTextAsync(
             message.Chat,

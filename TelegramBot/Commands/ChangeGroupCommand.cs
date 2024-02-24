@@ -1,5 +1,4 @@
 ﻿using Telegram.Bot.Types;
-using NuosHelpBot.Models;
 using Telegram.Bot;
 
 namespace NuosHelpBot.Commands;
@@ -10,13 +9,11 @@ public class ChangeGroupCommand : Command
 
     public override async Task Execute(Bot bot, Message message)
     {
-        var groups = await bot.Context.GetRawTable<Group>("Groups");
-
-        var keyboard = bot.KeyboardController.GroupsInlineKeyboard(groups);
+        var keyboard = Keyboards.EducationFormKb;
 
         await bot.Client.SendTextMessageAsync(
-            message.Chat,
-            "Оберіть нову групу",
+            message.From.Id,
+            "Оберіть форму та рівень освіти: ",
             replyMarkup: keyboard);
     }
 }

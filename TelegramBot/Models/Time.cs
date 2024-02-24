@@ -6,4 +6,6 @@ public class Time
     public int Number { get; set; }
     public TimeSpan StartTime { get; set; }
     public TimeSpan EndTime { get; set; }
+
+    public ICollection<Class>? Classes { get; set; }
 }

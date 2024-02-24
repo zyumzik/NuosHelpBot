@@ -9,7 +9,7 @@ public class SettingsCommand : Command
 
     public override async Task Execute(Bot bot, Message message)
     {
-        var keyboard = bot.KeyboardController.SettingsMenu;
+        var keyboard = Keyboards.SettingsMenu;
 
         await bot.Client.SendTextMessageAsync(
             message.From.Id,

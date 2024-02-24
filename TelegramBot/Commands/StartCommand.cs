@@ -1,4 +1,5 @@
-﻿using Telegram.Bot;
+﻿using System.Configuration;
+using Telegram.Bot;
 using Telegram.Bot.Types;
 using Telegram.Bot.Types.ReplyMarkups;
 
@@ -11,19 +12,26 @@ public class StartCommand : Command
     public override async Task Execute(Bot bot, Message message)
     {
         IReplyMarkup keyboard;
-        var studentExists = await bot.Context.StudentExists(message.From.Id);
-        if (!studentExists)
+
+        using (var context = new BotContext())
         {
-            await bot.Context.AddStudent(message.From.Username, message.From.Id);
-            keyboard = bot.KeyboardController.ChooseGroup;
+            if (!context.UserExists(message.From.Id))
+            {
+                context.AddUser(new()
+                {
+                    TelegramId = message.From.Id
+                });
+                keyboard = Keyboards.ChooseGroupKb;
+            }
+            else 
+                keyboard = Keyboards.MainMenu;
         }
-        else keyboard = bot.KeyboardController.MainMenu;
-        var text = bot.Configuration.Get("startText");
+
+        var text = ConfigurationManager.AppSettings["startText"];
 
         await bot.Client.SendTextMessageAsync(
             message.Chat.Id, 
-            text, 
-            //parseMode: ParseMode.Html,
+            text,
             replyMarkup: keyboard);
     }
 }

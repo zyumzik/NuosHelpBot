@@ -1,303 +1,238 @@
-﻿using Npgsql;
-using Dapper;
-using NuosHelpBot.Models;
+﻿using NuosHelpBot.Models;
+using Microsoft.EntityFrameworkCore;
+using System.Configuration;
 
 namespace NuosHelpBot;
 
-public class BotContext : IDisposable
+public class BotContext : DbContext
 {
-    public NpgsqlConnection Connection;
+    public DbSet<User> Users { get; set; }
+    public DbSet<Group> Groups { get; set; }
+    public DbSet<Class> Classes { get; set; }
+    public DbSet<ClassType> ClassTypes { get; set; }
+    public DbSet<Discipline> Disciplines { get; set; }
+    public DbSet<Teacher> Teachers { get; set; }
+    public DbSet<Time> Times { get; set; }
 
-    public BotContext(string connectionString)
+    public BotContext()
     {
-        Connection = new(connectionString);
-        try
+        Database.EnsureCreated();
+    }
+
+    protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
+    {
+        var connectionString = ConfigurationManager.AppSettings["dbConnectionString"];
+        optionsBuilder.UseNpgsql(connectionString);
+    }
+
+    protected override void OnModelCreating(ModelBuilder modelBuilder)
+    {
+        modelBuilder.Entity<Class>().
+            HasOne(c => c.Time).
+            WithMany(t => t.Classes).
+            HasForeignKey(c => c.TimeId);
+        modelBuilder.Entity<Class>().
+            HasOne(c => c.ClassType).
+            WithMany(ct => ct.Classes).
+            HasForeignKey(c => c.ClassTypeId);
+        modelBuilder.Entity<Class>().
+            HasOne(c => c.Discipline).
+            WithMany(d => d.Classes).
+            HasForeignKey(c => c.DisciplineId);
+        modelBuilder.Entity<Class>().
+            HasOne(c => c.Teacher).
+            WithMany(t => t.Classes).
+            HasForeignKey(c => c.TeacherId);
+        modelBuilder.Entity<Class>().
+            HasOne(c => c.Group).
+            WithMany(g => g.Classes).
+            HasForeignKey(c => c.GroupId);
+
+        modelBuilder.Entity<User>().
+            HasOne(u => u.Group).
+            WithMany(g => g.Users).
+            HasForeignKey(u => u.GroupId);
+    }
+
+    public bool UserExists(long telegramId)
+    {
+        var query = from users in Users
+                    where users.TelegramId == telegramId
+                    select users;
+        var student = query.FirstOrDefault();
+        return student != null;
+    }
+
+    public void AddUser(User user)
+    {
+        Users.Add(user);
+        SaveChanges();
+    }
+
+    public IEnumerable<Group> GetGroups(int course, string educationForm, string educationLevel)
+    {
+        var groups = from g in Groups where 
+                     g.Course == course &&
+                     string.Equals(g.EducationForm, educationForm) &&
+                     string.Equals(g.EducationLevel, educationLevel)
+                     select g;
+        return groups;
+    }
+
+    public Group? GetGroup(string code, int course, string educationForm, string educationLevel)
+    {
+        var group = (from g in Groups where 
+                     g.Course == course &&
+                     string.Equals(g.Code, code) &&
+                     string.Equals(g.EducationForm, educationForm) &&
+                     string.Equals(g.EducationLevel, educationLevel)
+                     select g).
+                     Include(g => g.Users).
+                     Include(g => g.Classes).
+                     FirstOrDefault();
+        return group;
+    }
+
+    public string SetStudentGroup(long telegramId, int groupId)
+    {
+        var student = (from users in Users
+                       where users.TelegramId == telegramId
+                       select users).FirstOrDefault();
+        var group = (from groups in Groups
+                     where groups.Id == groupId
+                     select groups).FirstOrDefault();
+
+        if (student != null && group != null)
         {
-            Connection.Open();
+            student.Group = group;
+            SaveChangesAsync();
+            return group.Code;
         }
-        catch (Exception ex)
+
+        return "";
+    }
+
+    public void SetStudentNotifications(long telegramId, bool notifications)
+    {
+        var student = (from users in Users
+                       where users.TelegramId == telegramId
+                       select users).FirstOrDefault();
+        if (student != null)
         {
-            Console.WriteLine("Context initialization error: " + ex);
-        }
-    }
-
-    public async Task<IEnumerable<T>> GetRawTable<T>(string table)
-    {
-        try
-        {
-            string commandText =
-                $"SELECT * " +
-                @$"FROM public.""{table}"" " +
-                @"ORDER BY ""Id"" ASC";
-            return await Connection.QueryAsync<T>(commandText);
-        } catch (Exception ex) 
-        { 
-            Console.WriteLine("GetRowTable error: " + ex); 
-            return Enumerable.Empty<T>(); 
-        }
-    }
-
-    public async Task AddStudent(string telegramName, long telegramId)
-    {
-        string sql = 
-            @"INSERT INTO public.""Students""" +
-            @"(""TelegramName"", ""TelegramId"") " +
-            @"VALUES (@telegramName, @telegramId)";
-        var args = new { telegramName, telegramId };
-        await Connection.ExecuteAsync(sql, args);
-    }
-
-    public async Task<bool> StudentExists(long telegramId)
-    {
-        string sql = 
-            @"SELECT EXISTS (" +
-                @"SELECT * " +
-                @"FROM public.""Students"" " +
-                @"WHERE ""TelegramId"" = @telegramId)";
-        var args = new { telegramId };
-        return await Connection.ExecuteScalarAsync<bool>(sql, args);
-    }
-
-    public async Task<Student> GetStudent(long telegramId)
-    {
-        string sql =
-            @"SELECT * " +
-            @"FROM public.""Students"" s " +
-                @"LEFT JOIN public.""Groups"" g " +
-                @"ON s.""GroupId"" = g.""Id"" " +
-                @"LEFT JOIN public.""Subgroups"" sg " +
-                @"ON s.""SubgroupId"" = sg.""Id"" " +
-            @"WHERE s.""TelegramId"" = @telegramId " +
-            @"ORDER BY s.""Id"" ASC";
-        var data = await Connection.QueryAsync<Student, Group, Subgroup, Student>(
-            sql, 
-            (student, group, subgroup) => 
-            { 
-                student.Group = group;
-                student.Subgroup = subgroup;
-                return student; 
-            },
-            new { telegramId });
-
-        return data.First();
-    }
-
-    public async Task<IEnumerable<Student>> GetNotifiedStudents()
-    {
-            /* SELECT s."Id", s."GroupId", s."Notify", s."SubgroupId", s."TelegramId", s."TelegramName", c."DisciplineId"
-FROM public."Classes" AS c
-INNER JOIN public."Groups" AS g ON c."GroupId" = g."Id"
-INNER JOIN public."Students" AS s ON g."Id" = s."GroupId"
-WHERE c."TimeId" = 2 */
-        try
-        {
-            string sql =
-                @"SELECT * " + 
-                @"FROM public.""Students"" s " + 
-                    @"LEFT JOIN public.""Groups"" g " + 
-                    @"ON s.""GroupId"" = g.""Id"" " +
-                    @"LEFT JOIN public.""Subgroups"" sg " + 
-                    @"ON s.""SubgroupId"" = sg.""Id"" " +
-                @"WHERE s.""Notify"" = true " + 
-                @"ORDER BY s.""Id"" ASC";
-            return await Connection.QueryAsync<Student, Group, Subgroup, Student>(
-                sql,
-                (student, group, subgroup) =>
-                {
-                    student.Group = group;
-                    student.Subgroup = subgroup;
-                    return student;
-                });
-
-        } catch
-        {
-            return Enumerable.Empty<Student>();
-        }
-    }
-
-    public async Task SetStudentGroup(long telegramId, string groupCode)
-    {
-        string sql =
-            @"UPDATE public.""Students"" " +
-            @"SET ""GroupId"" = (" +
-                @"SELECT ""Id"" " +
-                @"FROM public.""Groups"" " +
-                @"WHERE ""Code"" = @groupCode) " +
-            @"WHERE ""TelegramId"" = @telegramId";
-        var args = new { telegramId, groupCode };
-        await Connection.ExecuteAsync(sql, args);
-    }
-
-    public async Task SetStudentSubgroup(long telegramId, int subgroupType)
-    {
-        string sql =
-            @"UPDATE public.""Students"" " +
-            @"SET ""SubgroupId"" = (" +
-                @"SELECT ""Id"" " +
-                @"FROM public.""Subgroups"" " +
-                @"WHERE ""Type"" = @subgroupType) " +
-            @"WHERE ""TelegramId"" = @telegramId";
-        var args = new { telegramId, subgroupType };
-        await Connection.ExecuteAsync(sql, args);
-    }
-
-    public async Task SetStudentsNotifications(long telegramId, bool notify)
-    {
-        string sql =
-            @"UPDATE public.""Students"" " +
-            @"SET ""Notify"" = @notify " +
-            @"WHERE ""TelegramId"" = @telegramId";
-        var args = new { telegramId, notify };
-        await Connection.ExecuteAsync(sql, args);
-    }
-
-    public async Task<bool> ScheduleExists(long telegramId, int week, int day)
-    {
-        string sql =
-            @"SELECT EXISTS (" +
-            @"SELECT * " +
-            @"FROM public.""Classes"" c " +
-            @"WHERE c.""GroupId"" = ( " + 
-                @"SELECT ""GroupId"" " + 
-                @"FROM public.""Students"" " + 
-                @"WHERE ""TelegramId"" = @telegramId) " + 
-            @"AND c.""SubgroupId"" = ( " + 
-                @"SELECT ""SubgroupId"" " + 
-                @"FROM public.""Students"" " +
-                @"WHERE ""TelegramId"" = @telegramId) " + 
-            @"AND c.""Week"" = @week " + 
-            @"AND c.""Day"" = @day)";
-        var args = new { telegramId, week, day };
-        return await Connection.ExecuteScalarAsync<bool>(sql, args);
-    }
-
-    public async Task<IEnumerable<Class>> GetSchedule(long telegramId, int week, int day, bool subgroupSearch = true)
-    {
-        //if (!await ScheduleExists(telegramId, week, day)) return Enumerable.Empty<Class>();
-
-        try
-        {
-            string sql =
-                @"SELECT * " +
-                @"FROM public.""Classes"" c " +
-                    @"LEFT JOIN public.""Times"" t " +
-                    @"ON c.""TimeId"" = t.""Id"" " +
-                    @"LEFT JOIN public.""ClassTypes"" ct " +
-                    @"ON c.""ClassTypeId"" = ct.""Id"" " +
-                    @"LEFT JOIN public.""Disciplines"" d " +
-                    @"ON c.""DisciplineId"" = d.""Id"" " +
-                    @"LEFT JOIN public.""Teachers"" tch " +
-                    @"ON c.""TeacherId"" = tch.""Id"" " +
-                    @"LEFT JOIN public.""Positions"" p " +
-                    @"ON p.""Id"" = tch.""PositionId"" " +
-                    @"LEFT JOIN public.""Groups"" g " +
-                    @"ON c.""GroupId"" = g.""Id"" " +
-                    @"LEFT JOIN public.""Subgroups"" sg " +
-                    @"ON c.""SubgroupId"" = sg.""Id"" " +
-                @"WHERE c.""GroupId"" = (" +
-                    @"SELECT ""GroupId"" " +
-                    @"FROM public.""Students"" " +
-                    @"WHERE ""TelegramId"" = @telegramId) ";
-            if (subgroupSearch) sql +=
-                @"AND (c.""SubgroupId"" = (" +
-                    @"SELECT ""SubgroupId"" " +
-                    @"FROM public.""Students"" " +
-                    @"WHERE ""TelegramId"" = @telegramId) " +
-                    @"OR c.""SubgroupId"" = 1) ";
-            sql +=
-                @"AND c.""Week"" = @week " +
-                @"AND c.""Day"" = @day " +
-                @"ORDER BY t.""Number"" ASC";
-            var types = new Type[]
-            {
-            typeof(Class),
-            typeof(Time),
-            typeof(ClassType),
-            typeof(Discipline),
-            typeof(Teacher),
-            typeof(Position),
-            typeof(Group),
-            typeof(Subgroup)
-            };
-            Func<object[], Class> map = (obj) =>
-            {
-                Class m_class = obj[0] as Class;
-                m_class.Time = obj[1] as Time;
-                m_class.ClassType = obj[2] as ClassType;
-                m_class.Discipline = obj[3] as Discipline;
-                m_class.Teacher = obj[4] as Teacher;
-                m_class.Teacher.Position = obj[5] as Position;
-                m_class.Group = obj[6] as Group;
-                m_class.Subgroup = obj[7] as Subgroup;
-                return m_class;
-            };
-            var args = new { telegramId, week, day };
-
-            return await Connection.QueryAsync<Class>(sql, types, map, args);
-        } catch (Exception ex)
-        {
-            return Enumerable.Empty<Class>();
+            student.Notify = notifications;
+            SaveChanges();
         }
     }
 
-    public async Task<IEnumerable<Class>> GetSchedule(int week, int day, int time)
+    public IEnumerable<Time> GetTimes()
     {
-        try
-        {
-            string sql =
-                @"SELECT * " + 
-                @"FROM public.""Classes"" c " +
-                    @"LEFT JOIN public.""Times"" t " +
-                    @"ON c.""TimeId"" = t.""Id"" " +
-                    @"LEFT JOIN public.""ClassTypes"" ct " +
-                    @"ON c.""ClassTypeId"" = ct.""Id"" " +
-                    @"LEFT JOIN public.""Disciplines"" d " +
-                    @"ON c.""DisciplineId"" = d.""Id"" " +
-                    @"LEFT JOIN public.""Teachers"" tch " +
-                    @"ON c.""TeacherId"" = tch.""Id"" " +
-                    @"LEFT JOIN public.""Positions"" p " +
-                    @"ON p.""Id"" = tch.""PositionId"" " +
-                    @"LEFT JOIN public.""Groups"" g " +
-                    @"ON c.""GroupId"" = g.""Id"" " +
-                    @"LEFT JOIN public.""Subgroups"" sg " +
-                    @"ON c.""SubgroupId"" = sg.""Id"" " + 
-                @"WHERE c.""Week"" = @week " + 
-                @"AND c.""Day"" = @day " + 
-                @"AND t.""Number"" = @time";
-            var types = new Type[]
-            {
-                typeof(Class),
-                typeof(Time),
-                typeof(ClassType),
-                typeof(Discipline),
-                typeof(Teacher),
-                typeof(Position),
-                typeof(Group),
-                typeof(Subgroup)
-            };
-            Func<object[], Class> map = (obj) =>
-            {
-                Class m_class = obj[0] as Class;
-                m_class.Time = obj[1] as Time;
-                m_class.ClassType = obj[2] as ClassType;
-                m_class.Discipline = obj[3] as Discipline;
-                m_class.Teacher = obj[4] as Teacher;
-                m_class.Teacher.Position = obj[5] as Position;
-                m_class.Group = obj[6] as Group;
-                m_class.Subgroup = obj[7] as Subgroup;
-                return m_class;
-            };
-            var args = new { week, day, time };
+        return Times;
+    }
 
-            return await Connection.QueryAsync<Class>(sql, types, map, args);
-        } catch (Exception e)
+    public void AddGroup(Group group_)
+    {
+        var query = (from g in Groups
+                     where
+                     g.Course == group_.Course &&
+                     string.Equals(g.Code, group_.Code) &&
+                     string.Equals(g.EducationForm, group_.EducationForm) &&
+                     string.Equals(g.EducationLevel, group_.EducationLevel)
+                     select g)
+                     .Include(g => g.Users)
+                     .Include(g => g.Classes)
+                     .FirstOrDefault();
+        if (query == null)
         {
-            return Enumerable.Empty<Class>();
+            Groups.Add(group_);
+            SaveChanges();
         }
     }
 
-    public void Dispose()
+    public Time? GetTime(int timeNumber)
     {
-        Connection.Close();
+        var time = (from times in Times
+                    where times.Number == timeNumber
+                    select times).
+                    Include(t => t.Classes).
+                    FirstOrDefault();
+        return time;
+    }
+
+    public ClassType GetClassType(string name)
+    {
+        var classType = (from classTypes in ClassTypes
+                         where classTypes.Name == name
+                         select classTypes).
+                         Include(c => c.Classes).
+                         FirstOrDefault();
+        if (classType == null)
+        {
+            classType = (from classTypes in ClassTypes
+                         where classTypes.Id == 1
+                         select classTypes).
+                         Include(c => c.Classes).
+                         FirstOrDefault();
+        }
+        return classType;
+    }
+
+    public Discipline GetOrAddDiscipline(string name)
+    {
+        var discipline = (from disciplines in  Disciplines
+                          where string.Equals(disciplines.Name, name)
+                          select disciplines).
+                          Include(d => d.Classes).
+                          FirstOrDefault();
+        if (discipline != null) return discipline;
+        else
+        {
+            Disciplines.Add(new() { Name = name });
+            SaveChanges();
+
+            return GetOrAddDiscipline(name);
+        }
+    }
+
+    public Teacher GetOrAddTeacher(string name)
+    {
+        var teacher = (from teachers in Teachers
+                       where string.Equals(teachers.Name, name)
+                       select teachers).
+                       Include(t => t.Classes).
+                       FirstOrDefault();
+        if (teacher != null) return teacher;
+        else
+        {
+            Teachers.Add(new() { Name = name }); 
+            SaveChanges();
+
+            return GetOrAddTeacher(name);
+        }
+    }
+
+    public void AddClasses(List<Class> classes)
+    {
+        Classes.AddRange(classes);
+        SaveChanges();
+    }
+
+    public IEnumerable<Class> GetClasses(long telegramId, int week, int day, int semester)
+    {
+        var user = Users
+            .Where(u => u.TelegramId == telegramId)
+            .Include(u => u.Group)
+            .FirstOrDefault();
+        var classes = Classes.Where(c => 
+            c.GroupId == user.GroupId && 
+            c.Semester == semester && 
+            c.Week == week && 
+            c.Day == day)
+            .Include(c => c.Time)
+            .Include(c => c.ClassType)
+            .Include(c => c.Discipline)
+            .Include(c => c.Teacher)
+            .Include(c => c.Group);
+        
+        return classes;
     }
 }

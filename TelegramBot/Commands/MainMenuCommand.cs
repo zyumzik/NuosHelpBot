@@ -9,7 +9,7 @@ public class MainMenuCommand : Command
 
     public override async Task Execute(Bot bot, Message message)
     {
-        var keyboard = bot.KeyboardController.MainMenu;
+        var keyboard = Keyboards.MainMenu;
 
         await bot.Client.SendTextMessageAsync(
             message.From.Id,

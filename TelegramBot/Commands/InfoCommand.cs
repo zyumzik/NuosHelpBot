@@ -12,6 +12,6 @@ public class InfoCommand : Command
     {
         await bot.Client.SendTextMessageAsync(
             message.Chat,
-            bot.Configuration.Get("additionalInfoText"));
+            ConfigurationManager.AppSettings["additionalInfoText"]);
     }
 }

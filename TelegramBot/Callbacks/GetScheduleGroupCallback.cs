@@ -1,6 +1,9 @@
 ﻿using Telegram.Bot;
 using Telegram.Bot.Types;
 using Telegram.Bot.Types.Enums;
+using NuosHelpBot.Extensions;
+using NuosHelpBot.Models;
+using Telegram.Bot.Types.ReplyMarkups;
 
 namespace NuosHelpBot.Callbacks;
 
@@ -14,11 +17,17 @@ public class GetScheduleGroupCallback : Callback
         var messageId = int.Parse(args[0]);
         var week = int.Parse(args[1]);
         var day = int.Parse(args[2]);
+        var semester = BotTimeManager.CurrentSemester;
 
-        var schedule = await bot.Context.GetSchedule(query.From.Id, week, day, false);
+        string text;
+        InlineKeyboardMarkup keyboard;
 
-        var text = bot.MessageFormatter.ScheduleToString(schedule, week, day);
-        var keyboard = bot.KeyboardController.ScheduleGroupKeyboard(messageId, week, day);
+        using (var context = new BotContext())
+        {
+            var schedule = context.GetClasses(query.From.Id, week, day, semester);
+            text = schedule.ToString(week, day);
+            keyboard = Keyboards.ScheduleGroupKb(messageId, week, day);
+        }
 
         try
         {
@@ -30,6 +39,6 @@ public class GetScheduleGroupCallback : Callback
                 disableWebPagePreview: true,
                 replyMarkup: keyboard);
         }
-        catch (Exception ex) { Console.WriteLine($">>Error: message {messageId} was not edited"); }
+        catch (Exception e) { Console.WriteLine($">>Error: message {messageId} was not edited. {e}"); }
     }
 }

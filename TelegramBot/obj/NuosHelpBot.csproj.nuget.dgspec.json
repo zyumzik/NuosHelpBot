@@ -1,17 +1,17 @@
 {
   "format": 1,
   "restore": {
-    "D:\\VisualStudioProjects\\TelegramBot\\TelegramBot\\NuosHelpBot.csproj": {}
+    "D:\\VisualStudioProjects\\NuosHelpBot\\TelegramBot\\NuosHelpBot.csproj": {}
   },
   "projects": {
-    "D:\\VisualStudioProjects\\TelegramBot\\TelegramBot\\NuosHelpBot.csproj": {
+    "D:\\VisualStudioProjects\\NuosHelpBot\\TelegramBot\\NuosHelpBot.csproj": {
       "version": "1.0.0",
       "restore": {
-        "projectUniqueName": "D:\\VisualStudioProjects\\TelegramBot\\TelegramBot\\NuosHelpBot.csproj",
+        "projectUniqueName": "D:\\VisualStudioProjects\\NuosHelpBot\\TelegramBot\\NuosHelpBot.csproj",
         "projectName": "NuosHelpBot",
-        "projectPath": "D:\\VisualStudioProjects\\TelegramBot\\TelegramBot\\NuosHelpBot.csproj",
+        "projectPath": "D:\\VisualStudioProjects\\NuosHelpBot\\TelegramBot\\NuosHelpBot.csproj",
         "packagesPath": "C:\\Users\\danil\\.nuget\\packages\\",
-        "outputPath": "D:\\VisualStudioProjects\\TelegramBot\\TelegramBot\\obj\\",
+        "outputPath": "D:\\VisualStudioProjects\\NuosHelpBot\\TelegramBot\\obj\\",
         "projectStyle": "PackageReference",
         "fallbackFolders": [
           "C:\\Program Files (x86)\\Microsoft Visual Studio\\Shared\\NuGetPackages"
@@ -22,15 +22,15 @@
           "C:\\Program Files (x86)\\NuGet\\Config\\Microsoft.VisualStudio.Offline.config"
         ],
         "originalTargetFrameworks": [
-          "net6.0"
+          "net7.0"
         ],
         "sources": {
           "C:\\Program Files (x86)\\Microsoft SDKs\\NuGetPackages\\": {},
           "https://api.nuget.org/v3/index.json": {}
         },
         "frameworks": {
-          "net6.0": {
-            "targetAlias": "net6.0",
+          "net7.0": {
+            "targetAlias": "net7.0",
             "projectReferences": {}
           }
         },
@@ -41,12 +41,22 @@
         }
       },
       "frameworks": {
-        "net6.0": {
-          "targetAlias": "net6.0",
+        "net7.0": {
+          "targetAlias": "net7.0",
           "dependencies": {
-            "Dapper": {
+            "IronXL.Excel": {
               "target": "Package",
-              "version": "[2.0.151, )"
+              "version": "[2024.2.25, )"
+            },
+            "Microsoft.EntityFrameworkCore": {
+              "target": "Package",
+              "version": "[7.0.0, )"
+            },
+            "Microsoft.EntityFrameworkCore.Tools": {
+              "include": "Runtime, Build, Native, ContentFiles, Analyzers, BuildTransitive",
+              "suppressParent": "All",
+              "target": "Package",
+              "version": "[7.0.0, )"
             },
             "Newtonsoft.Json": {
               "target": "Package",
@@ -55,6 +65,10 @@
             "Npgsql": {
               "target": "Package",
               "version": "[7.0.6, )"
+            },
+            "Npgsql.EntityFrameworkCore.PostgreSQL": {
+              "target": "Package",
+              "version": "[7.0.0, )"
             },
             "Telegram.Bot": {
               "target": "Package",

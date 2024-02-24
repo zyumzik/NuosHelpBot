@@ -5,64 +5,55 @@ using Telegram.Bot.Types.Enums;
 
 using NuosHelpBot.Commands;
 using NuosHelpBot.Callbacks;
-using NuosHelpBot.Controllers;
 using NuosHelpBot.Parser;
+
+using System.Configuration;
+using NuosHelpBot.Extensions;
 
 namespace NuosHelpBot;
 
 public class Bot
 {
     public TelegramBotClient Client;
-    public BotConfiguration Configuration;
-    public BotContext Context;
     public BotTimeManager TimeManager;
-    public BotMessageFormatter MessageFormatter;
-    public KeyboardController KeyboardController;
-
-    public Downloader Downloader;
 
     private List<Command> _commands;
     private List<Callback> _callbacks;
 
     public Bot()
     {
-        Configuration = new();
-
-        Client = new TelegramBotClient(Configuration.Get("botToken"));
+        var token = ConfigurationManager.AppSettings["botToken"];
+        Client = new TelegramBotClient(token);
 
         _commands = new List<Command>
         {
-            new StartCommand(),
+            new ChangeGroupCommand(),
+            new InfoCommand(),
+            new MainMenuCommand(),
+            new NotificationsSettingsCommand(),
+            new ScheduleGroupCommand(),
             new ScheduleTodayCommand(),
             new ScheduleWeekCommand(),
-            new ScheduleGroupCommand(),
-            new InfoCommand(),
             new SettingsCommand(),
-            new NotificationsSettingsCommand(),
-            new ChangeGroupCommand(),
-            new ChangeSubgroupCommand(),
-            new MainMenuCommand()
+            new StartCommand()
         };
         _callbacks = new List<Callback>
         {
             new ChooseGroupCallback(),
-            new SetGroupCallback(),
-            new SetSubgroupCallback(),
-            new SetNotificationsCallback(),
             new GetScheduleGroupCallback(),
-            new GetScheduleWeekCallback()
+            new GetScheduleWeekCallback(),
+            new SetCourseCallback(),
+            new SetEducationFormCallback(),
+            new SetGroupCallback(),
+            new SetNotificationsCallback()
         };
 
-        KeyboardController = new();
-        MessageFormatter = new(this);
-        Context = new(Configuration.Get("dbConnectionString"));
         TimeManager = new(this);
-
-        Downloader = new Downloader(this);
     }
 
-    public void Start()
+    public async void Start()
     {
+
         var cancellationToken = new CancellationTokenSource().Token;
         var receiverOptions = new ReceiverOptions
         {
@@ -75,47 +66,51 @@ public class Bot
             receiverOptions,
             cancellationToken);
 
-        TimeManager.Start();
-
         Console.WriteLine($"Bot started: {Client.GetMeAsync().Result.FirstName}");
 
-        Downloader.Download();
+        if (ConfigurationManager.AppSettings["downloadSchedules"] == "true") await Downloader.DownloadSchedules();
+        if (ConfigurationManager.AppSettings["parseSchedules"] == "true") SchedulesParser.ParseSchedules();
+
+        TimeManager.Start();
     }
 
     public async void NotifyStudents(int week, int day, int timeNumber)
     {
-        var students = await Context.GetNotifiedStudents();
+        List<Models.User> users;
+        List<Models.Class> schedule;
+        using (var context = new BotContext())
+        {
+            users = context.Users.ToList();
+            schedule = context.Classes.ToList();
+        }
 
-        var schedule = await Context.GetSchedule(week, day, timeNumber);
-
-        foreach (var student in students)
+        foreach (var user in users)
         {
             try
             {
                 var studentClass = 
                     from c in schedule
-                    where c.Group.Code == student.Group.Code &&
-                    (c.Subgroup.Type == 0 || c.Subgroup.Type == student.Subgroup.Type)
+                    //where c.Group.Code == student.Group.Code &&
+                    //(c.Subgroup.Type == 0 || c.Subgroup.Type == student.Subgroup.Type)
                     select c;
 
                 if (studentClass.Count() > 0)
                 {
                     await Client.SendTextMessageAsync(
-                        student.TelegramId,
-                        MessageFormatter.ScheduleToNotify(studentClass),
+                        user.TelegramId,
+                        studentClass.ToNotify(),
                         parseMode: ParseMode.Html);
                 }
-            } catch (Exception ex)
+            } catch (Exception e)
             {
-                Console.WriteLine($"Message for {student.TelegramName} was not sent.");
+                Console.WriteLine($"Message for {user.TelegramId} was not sent. {e.Message}");
             }
         }
     }
 
     private Task HandleUpdate(ITelegramBotClient botClient, Update update, CancellationToken cancellationToken)
     {
-        var additionalDebugInfo = bool.Parse(Configuration.Get("additionalDebugInfo"));
-        if (additionalDebugInfo)
+        if (ConfigurationManager.AppSettings["additionalDebugInfo"] == "true")
             Console.WriteLine(Newtonsoft.Json.JsonConvert.SerializeObject(update));
 
         switch (update.Type)

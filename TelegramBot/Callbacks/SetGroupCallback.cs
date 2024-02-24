@@ -1,13 +1,11 @@
 ﻿using Telegram.Bot;
 using Telegram.Bot.Types;
-using Telegram.Bot.Types.ReplyMarkups;
-using NuosHelpBot.Models;
 
 namespace NuosHelpBot.Callbacks;
 
 class SetGroupCallback : Callback
 {
-    public override string Name => "/setGroup";  // arg[0] - groupCode, arg[1] - setSubgroup
+    public override string Name => "/setGroup";  // arg[0]: groupId
 
     public override bool Contains(CallbackQuery query)
     {
@@ -17,17 +15,16 @@ class SetGroupCallback : Callback
     public override async Task Execute(Bot bot, CallbackQuery query)
     {
         var args = ParseArgs(query);
-        var groupCode = args[0];
-        bool setSubgroup = bool.Parse(args[1]);
+        var groupId = int.Parse(args[0]);
+        var chosenGroupCode = "";
 
-        await bot.Context.SetStudentGroup(query.From.Id, groupCode);
+        using (var context = new BotContext())
+        {
+            chosenGroupCode = context.SetStudentGroup(query.From.Id, groupId);
+        }
 
-        var subgroups = await bot.Context.GetRawTable<Subgroup>("Subgroups");
-        IReplyMarkup keyboard = setSubgroup
-            ? bot.KeyboardController.SubgroupsInlineKeyboard(subgroups, true)
-            : bot.KeyboardController.MainMenu;
-        var text = $"Обрано групу {groupCode}";
-        text += setSubgroup ? ", тепер оберіть підгрупу" : "";
+        var keyboard = Keyboards.MainMenu;
+        var text = $"Групу обрано: {chosenGroupCode}";
 
         await bot.Client.SendTextMessageAsync(
             query.Message.Chat.Id,
