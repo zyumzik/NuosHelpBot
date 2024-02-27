@@ -6,9 +6,9 @@ using Telegram.Bot.Types.Enums;
 using NuosHelpBot.Commands;
 using NuosHelpBot.Callbacks;
 using NuosHelpBot.Parser;
+using NuosHelpBot.Extensions;
 
 using System.Configuration;
-using NuosHelpBot.Extensions;
 
 namespace NuosHelpBot;
 
@@ -48,7 +48,7 @@ public class Bot
             new SetNotificationsCallback()
         };
 
-        TimeManager = new(this);
+        TimeManager = new();
     }
 
     public async void Start()
@@ -71,40 +71,43 @@ public class Bot
         if (ConfigurationManager.AppSettings["downloadSchedules"] == "true") await Downloader.DownloadSchedules();
         if (ConfigurationManager.AppSettings["parseSchedules"] == "true") SchedulesParser.ParseSchedules();
 
+        TimeManager.OnTimerElapsed += 
+            (o, e) => { NotifyStudents(e.Week, e.Day, e.Time, e.Semester); };
         TimeManager.Start();
     }
 
-    public async void NotifyStudents(int week, int day, int timeNumber)
+    public async void NotifyStudents(int week, int day, int timeNumber, int semester)
     {
-        List<Models.User> users;
-        List<Models.Class> schedule;
+        var dictionary = new Dictionary<Models.User, Models.Class>();
+        var users = new List<Models.User>();
+        var classes = new List<Models.Class>();
+
+
         using (var context = new BotContext())
         {
-            users = context.Users.ToList();
-            schedule = context.Classes.ToList();
+            users = context.GetNotifiedUsers().ToList();
+        }
+        using (var context = new BotContext())
+        {
+            foreach (var user in users)
+            {
+                classes.Add(context.GetClasses(user.TelegramId, week, day, semester, timeNumber).First());
+            }
         }
 
-        foreach (var user in users)
-        {
-            try
-            {
-                var studentClass = 
-                    from c in schedule
-                    //where c.Group.Code == student.Group.Code &&
-                    //(c.Subgroup.Type == 0 || c.Subgroup.Type == student.Subgroup.Type)
-                    select c;
+        if (users.Count > 0 && classes.Count > 0 && users.Count == classes.Count)
+            for (int i = 0; i < users.Count; i++)
+                dictionary.Add(users[i], classes[i]);
 
-                if (studentClass.Count() > 0)
-                {
-                    await Client.SendTextMessageAsync(
-                        user.TelegramId,
-                        studentClass.ToNotify(),
-                        parseMode: ParseMode.Html);
-                }
-            } catch (Exception e)
-            {
-                Console.WriteLine($"Message for {user.TelegramId} was not sent. {e.Message}");
-            }
+        foreach (var item in dictionary)
+        {
+            var text = item.Value.ToNotify();
+
+            await Client.SendTextMessageAsync(
+            item.Key.TelegramId,
+            text,
+            parseMode: ParseMode.Html);
+            Console.WriteLine($"User {item.Key.TelegramId} was notified");
         }
     }
 
@@ -140,7 +143,9 @@ public class Bot
         Console.WriteLine($"<< Message from {message.From.Username}: {message.Text}");
         foreach (var command in _commands)
         {
-            if (command.Contains(message)) await command.Execute(this, message);
+            if (command.Contains(message)) 
+                await command.Execute(this, message);
+            //Task.Run(() => command.Execute(this, message));
         }
     }
 

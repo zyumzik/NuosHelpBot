@@ -1,14 +1,18 @@
-﻿using System.Timers;
+﻿//using System.Timers;
 using System.Configuration;
+using Microsoft.Win32;
 using NuosHelpBot.Models;
 
 namespace NuosHelpBot;
 
-public class BotTimeManager : IDisposable
+public class BotTimeManager
 {
-    private Bot _bot;
-    private System.Timers.Timer _timer;
-    private IEnumerable<Time> _times;
+    public event EventHandler<OnTimerElapsedEventArgs> OnTimerElapsed;
+
+    private List<Time> _times;
+    private Timer _timer;
+    private int _timerInterval;
+    private int _timerOffset;
 
     public static int CurrentSemester
     {
@@ -43,56 +47,65 @@ public class BotTimeManager : IDisposable
         get => (int)DateTime.Now.DayOfWeek;
     }
 
-    public BotTimeManager(Bot bot)
+    public class OnTimerElapsedEventArgs : EventArgs
     {
-        _bot = bot;
+        public int Semester;
+        public int Week;
+        public int Day;
+        public int Time;
+    }
+
+    public BotTimeManager()
+    {
+        _timerOffset = int.Parse(ConfigurationManager.AppSettings["minutesBeforeClassNotify"]);
     }
 
     public void Start()
     {
         using (var context = new BotContext())
         {
-            _times = context.GetTimes();
+            _times = context.GetTimes().ToList();
         }
 
-        var minutes = int.Parse(ConfigurationManager.AppSettings["timerTickMinutes"]);
-        var _tempTimer = new System.Timers.Timer(1000);
-        _tempTimer.AutoReset = true;
-        _tempTimer.Elapsed += (s, e) =>
-        {
-            if (DateTime.Now.TimeOfDay.Minutes % minutes == 0)
-            {
-                _timer = new(minutes * 60 * 1000);
-                _timer.AutoReset = true;
-                _timer.Elapsed += OnTimerTick;
-                _timer.Start();
-
-                _tempTimer.Stop();
-                _tempTimer.Dispose();
-                Console.WriteLine($"Timer calibrated: {DateTime.Now.TimeOfDay}, period: {minutes}");
-            }
-        };
-        _tempTimer.Start();
+        _timerInterval = TimeBeforeNext5Mins();
+        _timer = new(TimerCallback, null, _timerInterval, Timeout.Infinite);
     }
 
-    private void OnTimerTick(object? sender, ElapsedEventArgs e)
+    private void TimerCallback(object state)
     {
-        var minutes = int.Parse(ConfigurationManager.AppSettings["minutesBeforeClassNotify"]);
-        var currentTime = DateTime.Now.TimeOfDay;
-        foreach (var time in _times)
+        var currentTime = DateTime.Now;
+        var time = (from t in _times where
+                   t.StartTime.Hours == currentTime.Hour &&
+                   t.StartTime.Minutes == currentTime.Minute + _timerOffset
+                    select t).FirstOrDefault();
+        if (time != null)
         {
-            if (currentTime.Hours == time.StartTime.Hours &&
-                currentTime.Minutes == time.StartTime.Minutes - minutes)
+            OnTimerElapsed?.Invoke(this, new()
             {
-                _bot.NotifyStudents(CurrentWeek, CurrentDay, time.Number);
-                Console.WriteLine("Notifying users");
-            }
+                Semester = CurrentSemester,
+                Week = CurrentWeek,
+                Day = CurrentDay,
+                Time = time.Number
+            });
+            Console.WriteLine($"Timer elapsed: {time.Number} - {time.StartTime}");
         }
-        Console.WriteLine($"Timer tick: {DateTime.Now.TimeOfDay}");
+        _timerInterval = TimeBeforeNext5Mins();
+        _timer.Change(_timerInterval, Timeout.Infinite);
     }
 
-    public void Dispose()
+    private int TimeBeforeNext5Mins()
     {
-        _timer.Dispose();
+        DateTime now = DateTime.Now;
+
+        DateTime next5Minute = new DateTime(now.Year, now.Month, now.Day, now.Hour, (now.Minute / 5) * 5, 0);
+
+        if (next5Minute < now)
+        {
+            next5Minute = next5Minute.AddMinutes(5);
+        }
+
+        TimeSpan timeUntilNext5Minute = next5Minute - now;
+
+        return (int)timeUntilNext5Minute.TotalMilliseconds;
     }
 }

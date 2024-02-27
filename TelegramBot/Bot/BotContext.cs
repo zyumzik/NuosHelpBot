@@ -69,6 +69,14 @@ public class BotContext : DbContext
         SaveChanges();
     }
 
+    public IEnumerable<User> GetNotifiedUsers()
+    {
+        var users = from u in Users
+                    where u.Notify == true
+                    select u;
+        return users;
+    }
+
     public IEnumerable<Group> GetGroups(int course, string educationForm, string educationLevel)
     {
         var groups = from g in Groups where 
@@ -105,7 +113,7 @@ public class BotContext : DbContext
         if (student != null && group != null)
         {
             student.Group = group;
-            SaveChangesAsync();
+            SaveChanges();
             return group.Code;
         }
 
@@ -216,7 +224,7 @@ public class BotContext : DbContext
         SaveChanges();
     }
 
-    public IEnumerable<Class> GetClasses(long telegramId, int week, int day, int semester)
+    public IEnumerable<Class> GetClasses(long telegramId, int week, int day, int semester, int time = 0)
     {
         var user = Users
             .Where(u => u.TelegramId == telegramId)
@@ -231,8 +239,14 @@ public class BotContext : DbContext
             .Include(c => c.ClassType)
             .Include(c => c.Discipline)
             .Include(c => c.Teacher)
-            .Include(c => c.Group);
+            .Include(c => c.Group)
+            .OrderBy(c => c.Time.Number);
         
+        if (time != 0)
+        {
+            return classes.Where(c => c.Time.Number == time);
+        }
+
         return classes;
     }
 }

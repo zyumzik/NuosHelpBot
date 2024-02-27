@@ -1,6 +1,5 @@
 ﻿using NuosHelpBot.Models;
 using System.Configuration;
-using System.Data;
 using System.Text;
 
 namespace NuosHelpBot.Extensions;
@@ -29,28 +28,9 @@ public static class ClassExtensions
     {
         var sb = new StringBuilder();
 
-        sb.Append("<i>📆 | ");
-        if (specifyDate)
-        {
-            var date = DateTime.Now;
+        sb.AppendLine(SpecifyDate(week, day, specifyDate) + "\n");
 
-            int difference = 0;
-
-            if (week != BotTimeManager.CurrentWeek) difference += 7;
-
-            if (day > (int)DateTime.Now.DayOfWeek) difference += day - (int)DateTime.Now.DayOfWeek;
-            else if (day < (int)DateTime.Now.DayOfWeek) difference -= (int)DateTime.Now.DayOfWeek - day;
-
-            date = date.AddDays(difference);
-
-            sb.Append($"{date.Day} {date.Month.ToMonth()}, ");
-        }
-
-        if (day != 0 && week != 0)
-            sb.Append($"{day.ToDay()}, {week} тиждень\n\n");
-        sb.Append("</i>");
-
-        if (classes.Count() == 0) sb.Append(ConfigurationManager.AppSettings["emptyDayText"]);
+        if (classes.Count() == 0) sb.Append(ConfigurationManager.AppSettings["emptyDayText"] + "\n");
 
         foreach (var item in classes)
         {
@@ -60,18 +40,42 @@ public static class ClassExtensions
         return sb.ToString();
     }
 
-    public static string ToNotify(this IEnumerable<Class> classes)
+    public static string ToNotify(this Class @class)
     {
-        if (classes.Count() <= 0) return string.Empty;
-
         var sb = new StringBuilder();
         var minutes = ConfigurationManager.AppSettings["minutesBeforeClassNotify"];
 
-        sb.Append($"Наступна пара через {minutes} хвилин: ");
-        foreach (var item in classes)
+        sb.AppendLine($"Наступна пара через {minutes} хвилин:\n");
+        sb.AppendLine(SpecifyDate(@class.Week, @class.Day, true) + "\n");
+        sb.Append(ToString(@class));
+
+        return sb.ToString();
+    }
+
+    private static string SpecifyDate(int week = 0, int day = 0, bool date = false)
+    {
+        var sb = new StringBuilder();
+
+        sb.Append("📆 | <i>");
+
+        if (date)
         {
-            sb.Append(item.ToString());
+            var date_ = DateTime.Now;
+            int difference = 0;
+
+            if (week != BotTimeManager.CurrentWeek) difference += 7;
+
+            if (day > (int)DateTime.Now.DayOfWeek) difference += day - (int)DateTime.Now.DayOfWeek;
+            else if (day < (int)DateTime.Now.DayOfWeek) difference -= (int)DateTime.Now.DayOfWeek - day;
+
+            date_ = date_.AddDays(difference);
+
+            sb.Append($"{date_.Day} {date_.Month.ToMonth()}, ");
         }
+
+        if (day != 0 && week != 0)
+            sb.Append($"{day.ToDay()}, {week} тиждень");
+        sb.Append("</i>");
 
         return sb.ToString();
     }

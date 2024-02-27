@@ -180,12 +180,12 @@ public class Keyboards
                     $"{nextDay.ToDay() }   ▶",
                     $"/getScheduleWeek {messageId} {currentWeek} {nextDay}")
             },
-            new InlineKeyboardButton[]
+            /*new InlineKeyboardButton[]
             {
                 InlineKeyboardButton.WithCallbackData(
                     $"🔽     {week} тиждень     🔽",
                     $"/getScheduleWeek {messageId} {week} 1")
-            }
+            }*/
         });
     }
 }
