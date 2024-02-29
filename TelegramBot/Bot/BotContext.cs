@@ -83,6 +83,7 @@ public class BotContext : DbContext
                      g.Course == course &&
                      string.Equals(g.EducationForm, educationForm) &&
                      string.Equals(g.EducationLevel, educationLevel)
+                     orderby g.Code
                      select g;
         return groups;
     }

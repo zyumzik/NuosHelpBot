@@ -9,6 +9,7 @@ using NuosHelpBot.Parser;
 using NuosHelpBot.Extensions;
 
 using System.Configuration;
+using System.Xml;
 
 namespace NuosHelpBot;
 
@@ -78,36 +79,33 @@ public class Bot
 
     public async void NotifyStudents(int week, int day, int timeNumber, int semester)
     {
-        var dictionary = new Dictionary<Models.User, Models.Class>();
-        var users = new List<Models.User>();
-        var classes = new List<Models.Class>();
-
-
-        using (var context = new BotContext())
+        try
         {
-            users = context.GetNotifiedUsers().ToList();
-        }
-        using (var context = new BotContext())
-        {
-            foreach (var user in users)
+            var users = new List<Models.User>();
+            using (var context = new BotContext())
             {
-                classes.Add(context.GetClasses(user.TelegramId, week, day, semester, timeNumber).First());
+                users = context.GetNotifiedUsers().ToList();
             }
-        }
+            using (var context = new BotContext())
+            {
+                foreach (var user in users)
+                {
+                    var userClasses = context.GetClasses(user.TelegramId, week, day, semester, timeNumber).FirstOrDefault();
+                    if (userClasses != null)
+                    {
+                        var text = userClasses.ToNotify();
 
-        if (users.Count > 0 && classes.Count > 0 && users.Count == classes.Count)
-            for (int i = 0; i < users.Count; i++)
-                dictionary.Add(users[i], classes[i]);
-
-        foreach (var item in dictionary)
+                        await Client.SendTextMessageAsync(
+                        user.TelegramId,
+                        text,
+                        parseMode: ParseMode.Html);
+                        Console.WriteLine($"User {user.TelegramId} was notified");
+                    }
+                }
+            }
+        } catch (Exception ex)
         {
-            var text = item.Value.ToNotify();
-
-            await Client.SendTextMessageAsync(
-            item.Key.TelegramId,
-            text,
-            parseMode: ParseMode.Html);
-            Console.WriteLine($"User {item.Key.TelegramId} was notified");
+            Console.WriteLine($"ERROR OCCURED DURING NOTIFYING STUDENTS: {ex.Message}");
         }
     }
 
