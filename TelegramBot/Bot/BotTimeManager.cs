@@ -1,6 +1,4 @@
-﻿//using System.Timers;
-using System.Configuration;
-using Microsoft.Win32;
+﻿using System.Configuration;
 using NuosHelpBot.Models;
 
 namespace NuosHelpBot;
@@ -69,14 +67,6 @@ public class BotTimeManager
 
         _timerInterval = TimeBeforeNext5Mins();
         _timer = new(TimerCallback, null, _timerInterval, Timeout.Infinite);
-
-        // testing 
-        _times.Add(new() 
-        { 
-            Number = 3, 
-            StartTime = new(12, 50, 00),
-            EndTime = new(13, 00, 00) 
-        });
     }
 
     private void TimerCallback(object state)

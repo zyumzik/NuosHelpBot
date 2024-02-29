@@ -2,7 +2,6 @@
 using Telegram.Bot.Types;
 using Telegram.Bot.Types.Enums;
 using NuosHelpBot.Extensions;
-using NuosHelpBot.Models;
 using Telegram.Bot.Types.ReplyMarkups;
 
 namespace NuosHelpBot.Callbacks;

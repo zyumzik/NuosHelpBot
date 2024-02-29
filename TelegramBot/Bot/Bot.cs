@@ -9,7 +9,6 @@ using NuosHelpBot.Parser;
 using NuosHelpBot.Extensions;
 
 using System.Configuration;
-using System.Xml;
 
 namespace NuosHelpBot;
 
